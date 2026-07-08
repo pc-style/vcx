@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -49,6 +49,21 @@ test("prints installed version", async () => {
       const { stdout } = await run([flag], home);
       assert.match(stdout, /^vcx 0\.1\.0/);
     }
+  });
+});
+
+test("resolves git root when launched through an install symlink", async () => {
+  await withHome(async (home) => {
+    const binDir = path.join(home, "bin");
+    const symlinkPath = path.join(binDir, "vcx");
+    await mkdir(binDir, { recursive: true });
+    await symlink(cli, symlinkPath);
+
+    const { stdout } = await execFileAsync(process.execPath, [symlinkPath, "version"], {
+      env: { ...process.env, HOME: home, USERPROFILE: home, VCX_NO_UPDATE_CHECK: "1" },
+    });
+
+    assert.match(stdout, /^vcx 0\.1\.0 \([a-f0-9]+\)/);
   });
 });
 

@@ -2,7 +2,7 @@
 
 import { spawn } from "node:child_process";
 import { constants, copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { accessSync } from "node:fs";
+import { accessSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,7 +14,7 @@ const updateCheckPath = path.join(vcxDir, "last-update-check");
 const configPath = path.join(vcxDir, "config.json");
 const vercelDir = path.join(homedir(), ".vercel");
 const vercelFiles = ["auth.json", "config.json"] as const;
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const projectRoot = path.resolve(path.dirname(realpathSync(fileURLToPath(import.meta.url))), "..");
 
 type Config = {
   vercelCommand?: string;
