@@ -44,17 +44,17 @@ async function main(args: string[]): Promise<number> {
     return 0;
   }
 
-  if (args[0] === "version" || args[0] === "--version" || args[0] === "-v") {
+  if (args[0] === "version" || args[0] === "v" || args[0] === "--version" || args[0] === "-v") {
     return printVersion();
   }
 
-  if (args[0] === "update") {
+  if (args[0] === "update" || args[0] === "up") {
     return updateVcx();
   }
 
   await maybeNotifyUpdate();
 
-  if (args[0] === "account") {
+  if (args[0] === "account" || args[0] === "a") {
     return handleAccount(args.slice(1));
   }
 
@@ -70,12 +70,12 @@ function printHelp(): void {
 
 Usage:
   vcx [...args]                       Pass through to vercel
-  vcx update                          Pull and rebuild vcx when installed from git
-  vcx version                         Print installed version and git revision
-  vcx account add <name>              Login and save account auth
-  vcx account remove <name>           Delete a saved account
-  vcx account list                    List saved accounts
-  vcx account switch <name>           Activate a saved account
+  vcx update | up                     Pull and rebuild vcx when installed from git
+  vcx version | v | -v | --version    Print installed version and git revision
+  vcx account | a add <name>          Login and save account auth
+  vcx account | a remove <name>       Delete a saved account
+  vcx account | a list                List saved accounts
+  vcx account | a switch <name>       Activate a saved account
   vcx domain add <domain> [--dry-run] Run vercel domain add, then manage Cloudflare DNS
 
 Config: ~/.vcx/config.json

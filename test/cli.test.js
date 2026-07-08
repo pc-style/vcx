@@ -28,7 +28,8 @@ test("prints help", async () => {
   await withHome(async (home) => {
     const { stdout } = await run(["--help"], home);
     assert.match(stdout, /vcx - Vercel CLI extras/);
-    assert.match(stdout, /vcx account switch <name>/);
+    assert.match(stdout, /vcx account \| a switch <name>/);
+    assert.match(stdout, /vcx version \| v \| -v \| --version/);
   });
 });
 
@@ -36,13 +37,18 @@ test("lists empty account store", async () => {
   await withHome(async (home) => {
     const { stdout } = await run(["account", "list"], home);
     assert.equal(stdout.trim(), "No saved accounts.");
+
+    const alias = await run(["a", "list"], home);
+    assert.equal(alias.stdout.trim(), "No saved accounts.");
   });
 });
 
 test("prints installed version", async () => {
   await withHome(async (home) => {
-    const { stdout } = await run(["version"], home);
-    assert.match(stdout, /^vcx 0\.1\.0/);
+    for (const flag of ["version", "v", "-v", "--version"]) {
+      const { stdout } = await run([flag], home);
+      assert.match(stdout, /^vcx 0\.1\.0/);
+    }
   });
 });
 
@@ -60,7 +66,7 @@ test("switches and removes saved account snapshots", async () => {
     assert.equal(await readFile(path.join(home, ".vercel", "auth.json"), "utf8"), '{"token":"saved"}\n');
     assert.equal(await readFile(path.join(vcx, "current-account"), "utf8"), "client-a\n");
 
-    const listed = await run(["account", "list"], home);
+    const listed = await run(["a", "list"], home);
     assert.match(listed.stdout, /\* client-a/);
 
     const removed = await run(["account", "remove", "client-a"], home);

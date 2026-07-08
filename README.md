@@ -9,12 +9,12 @@ vcx deploy --prod
 Handled commands add workflow helpers:
 
 ```bash
-vcx update
-vcx version
-vcx account add client-a
-vcx account list
-vcx account switch client-a
-vcx account remove client-a
+vcx update # or: vcx up
+vcx version # or: vcx v, vcx -v, vcx --version
+vcx account add client-a # or: vcx a add client-a
+vcx account list # or: vcx a list
+vcx account switch client-a # or: vcx a switch client-a
+vcx account remove client-a # or: vcx a remove client-a
 vcx domain add app.pcstyle.dev --dry-run
 ```
 
