@@ -9,6 +9,8 @@ vcx deploy --prod
 Handled commands add workflow helpers:
 
 ```bash
+vcx update
+vcx version
 vcx account add client-a
 vcx account list
 vcx account switch client-a
@@ -64,6 +66,32 @@ Create `~/.vcx/config.json` when you want non-default behavior:
 ```
 
 `vcx domain add <domain>` runs the real `vercel domain add <domain>` first. If the domain matches a configured Cloudflare zone, it upserts a DNS-only CNAME to `cname.vercel-dns.com` using the token from `CLOUDFLARE_API_TOKEN` by default.
+
+## Updates
+
+When installed from git using the installer, `vcx` checks for updates at most once per day during normal command runs. If `origin/main` is ahead, it prints a notice and leaves your current command alone.
+
+Apply updates explicitly:
+
+```bash
+vcx update
+```
+
+Disable update checks in `~/.vcx/config.json`:
+
+```json
+{
+  "autoUpdate": {
+    "enabled": false
+  }
+}
+```
+
+Or for a single run:
+
+```bash
+VCX_NO_UPDATE_CHECK=1 vcx deploy --prod
+```
 
 ## QoL roadmap
 

@@ -20,7 +20,7 @@ async function withHome(fn) {
 
 async function run(args, home) {
   return execFileAsync(process.execPath, [cli, ...args], {
-    env: { ...process.env, HOME: home, USERPROFILE: home },
+    env: { ...process.env, HOME: home, USERPROFILE: home, VCX_NO_UPDATE_CHECK: "1" },
   });
 }
 
@@ -36,6 +36,13 @@ test("lists empty account store", async () => {
   await withHome(async (home) => {
     const { stdout } = await run(["account", "list"], home);
     assert.equal(stdout.trim(), "No saved accounts.");
+  });
+});
+
+test("prints installed version", async () => {
+  await withHome(async (home) => {
+    const { stdout } = await run(["version"], home);
+    assert.match(stdout, /^vcx 0\.1\.0/);
   });
 });
 

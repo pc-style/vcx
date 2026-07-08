@@ -5,16 +5,20 @@ import { constants, copyFile, mkdir, readdir, readFile, rm, stat, writeFile } fr
 import { accessSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const vcxDir = path.join(homedir(), ".vcx");
 const accountsDir = path.join(vcxDir, "accounts");
 const currentAccountPath = path.join(vcxDir, "current-account");
+const updateCheckPath = path.join(vcxDir, "last-update-check");
 const configPath = path.join(vcxDir, "config.json");
 const vercelDir = path.join(homedir(), ".vercel");
 const vercelFiles = ["auth.json", "config.json"] as const;
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 type Config = {
   vercelCommand?: string;
+  autoUpdate?: { enabled?: boolean; checkIntervalHours?: number };
   cloudflare?: { tokenEnv?: string };
   domains?: Record<string, { provider?: "cloudflare" }>;
 };
@@ -40,6 +44,16 @@ async function main(args: string[]): Promise<number> {
     return 0;
   }
 
+  if (args[0] === "version" || args[0] === "--version" || args[0] === "-v") {
+    return printVersion();
+  }
+
+  if (args[0] === "update") {
+    return updateVcx();
+  }
+
+  await maybeNotifyUpdate();
+
   if (args[0] === "account") {
     return handleAccount(args.slice(1));
   }
@@ -56,6 +70,8 @@ function printHelp(): void {
 
 Usage:
   vcx [...args]                       Pass through to vercel
+  vcx update                          Pull and rebuild vcx when installed from git
+  vcx version                         Print installed version and git revision
   vcx account add <name>              Login and save account auth
   vcx account remove <name>           Delete a saved account
   vcx account list                    List saved accounts
@@ -64,6 +80,33 @@ Usage:
 
 Config: ~/.vcx/config.json
 Token:  CLOUDFLARE_API_TOKEN by default`);
+}
+
+async function printVersion(): Promise<number> {
+  const packageJson = JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8")) as { version?: string };
+  const revision = await gitOutput(["rev-parse", "--short", "HEAD"]);
+  console.log(`vcx ${packageJson.version ?? "0.0.0"}${revision ? ` (${revision})` : ""}`);
+  return 0;
+}
+
+async function updateVcx(): Promise<number> {
+  if (!(await exists(path.join(projectRoot, ".git")))) {
+    throw new Error("vcx update requires a git-based install. Re-run the installer: curl -fsSL https://install.pcstyle.dev/vsx.sh | bash");
+  }
+
+  console.log("Updating vcx...");
+  let exitCode = await runCommand("git", ["-C", projectRoot, "pull", "--ff-only"], "inherit");
+  if (exitCode !== 0) return exitCode;
+
+  exitCode = await runCommand("bun", ["install", "--cwd", projectRoot], "inherit");
+  if (exitCode !== 0) return exitCode;
+
+  exitCode = await runCommand("bun", ["run", "--cwd", projectRoot, "build"], "inherit");
+  if (exitCode !== 0) return exitCode;
+
+  await writeFile(updateCheckPath, String(Date.now()), "utf8");
+  console.log("vcx is up to date.");
+  return 0;
 }
 
 async function handleAccount(args: string[]): Promise<number> {
@@ -205,18 +248,55 @@ async function cf<T>(pathPart: string, token: string, method = "GET", body?: unk
   return json.result;
 }
 
+async function maybeNotifyUpdate(): Promise<void> {
+  if (process.env.VCX_NO_UPDATE_CHECK === "1") return;
+  const config = await readConfig();
+  if (config.autoUpdate?.enabled === false) return;
+  if (!(await exists(path.join(projectRoot, ".git")))) return;
+
+  const lastCheck = Number((await readTextIfExists(updateCheckPath)) ?? 0);
+  const interval = Math.max(1, config.autoUpdate?.checkIntervalHours ?? 24) * 60 * 60 * 1000;
+  if (Date.now() - lastCheck < interval) return;
+
+  await mkdir(vcxDir, { recursive: true });
+  await writeFile(updateCheckPath, String(Date.now()), "utf8");
+
+  const fetchCode = await runCommand("git", ["-C", projectRoot, "fetch", "--quiet", "--prune"], "ignore");
+  if (fetchCode !== 0) return;
+
+  const local = await gitOutput(["rev-parse", "HEAD"]);
+  const upstream = await gitOutput(["rev-parse", "@{u}"]);
+  if (!local || !upstream || local === upstream) return;
+
+  console.error("vcx update available. Run: vcx update");
+}
+
 async function runVercel(args: string[], stdio: "inherit" | "pipe"): Promise<number> {
   const command = (await readConfig()).vercelCommand ?? "vercel";
+  return runCommand(command, args, stdio, `Could not find Vercel command "${command}". Install the Vercel CLI or set vercelCommand in ${configPath}.`);
+}
+
+async function runCommand(command: string, args: string[], stdio: "inherit" | "pipe" | "ignore", missingMessage?: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio, shell: false });
     child.on("error", (error) => {
       if (isNodeError(error) && error.code === "ENOENT") {
-        reject(new Error(`Could not find Vercel command "${command}". Install the Vercel CLI or set vercelCommand in ${configPath}.`));
+        reject(new Error(missingMessage ?? `Could not find command "${command}".`));
         return;
       }
       reject(error);
     });
     child.on("close", (code) => resolve(code ?? 1));
+  });
+}
+
+async function gitOutput(args: string[]): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const child = spawn("git", ["-C", projectRoot, ...args], { stdio: ["ignore", "pipe", "ignore"], shell: false });
+    const chunks: Buffer[] = [];
+    child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+    child.on("error", () => resolve(undefined));
+    child.on("close", (code) => resolve(code === 0 ? Buffer.concat(chunks).toString("utf8").trim() : undefined));
   });
 }
 
@@ -242,6 +322,11 @@ async function restoreVercelFiles(name: string): Promise<void> {
 async function readConfig(): Promise<Config> {
   if (!(await exists(configPath))) return {};
   return JSON.parse(await readFile(configPath, "utf8")) as Config;
+}
+
+async function readTextIfExists(target: string): Promise<string | undefined> {
+  if (!(await exists(target))) return undefined;
+  return readFile(target, "utf8");
 }
 
 function resolveConfiguredZone(domain: string, config: Config): string | undefined {
