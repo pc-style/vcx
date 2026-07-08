@@ -8,6 +8,8 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const cli = path.resolve("dist/index.js");
+const packageJson = JSON.parse(await readFile(path.resolve("package.json"), "utf8"));
+const versionPattern = new RegExp(`^vcx ${packageJson.version.replaceAll(".", "\\.")}`);
 
 async function withHome(fn) {
   const home = await mkdtemp(path.join(tmpdir(), "vcx-test-"));
@@ -47,7 +49,7 @@ test("prints installed version", async () => {
   await withHome(async (home) => {
     for (const flag of ["version", "v", "-v", "--version"]) {
       const { stdout } = await run([flag], home);
-      assert.match(stdout, /^vcx 0\.1\.0/);
+      assert.match(stdout, versionPattern);
     }
   });
 });
@@ -63,7 +65,7 @@ test("resolves git root when launched through an install symlink", async () => {
       env: { ...process.env, HOME: home, USERPROFILE: home, VCX_NO_UPDATE_CHECK: "1" },
     });
 
-    assert.match(stdout, /^vcx 0\.1\.0 \([a-f0-9]+\)/);
+    assert.match(stdout, new RegExp(`${versionPattern.source} \\([a-f0-9]+\\)`));
   });
 });
 
