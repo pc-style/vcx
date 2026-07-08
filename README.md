@@ -18,6 +18,20 @@ vcx domain add app.pcstyle.dev --dry-run
 
 ## Setup
 
+One-line install:
+
+```bash
+curl -fsSL https://install.pcstyle.dev/vsx.sh | bash
+```
+
+Non-interactive install:
+
+```bash
+curl -fsSL https://install.pcstyle.dev/vsx.sh | bash -s -- --yes
+```
+
+Manual setup:
+
 ```bash
 bun install
 bun run build
