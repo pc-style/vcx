@@ -7,6 +7,7 @@ INSTALL_DIR="${VCX_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/vcx}"
 BIN_DIR="${VCX_BIN_DIR:-$HOME/.local/bin}"
 BIN_PATH="$BIN_DIR/$APP_NAME"
 YES=0
+TTY="/dev/tty"
 
 usage() {
   cat <<'EOF'
@@ -72,19 +73,39 @@ note() {
   printf '%s\n' "$*"
 }
 
-confirm() {
-  local prompt="$1"
-  if [[ "$YES" == "1" || ! -t 0 ]]; then
+is_interactive() {
+  [[ "$YES" != "1" && -r "$TTY" && -w "$TTY" ]]
+}
+
+prompt_value() {
+  local label="$1"
+  local default_value="$2"
+
+  if ! is_interactive; then
+    printf '%s\n' "$default_value"
     return 0
   fi
 
-  if has gum; then
-    gum confirm "$prompt"
-    return $?
+  local answer
+  printf '%s [%s]: ' "$label" "$default_value" >"$TTY"
+  IFS= read -r answer <"$TTY"
+  printf '%s\n' "${answer:-$default_value}"
+}
+
+confirm() {
+  local prompt="$1"
+  if [[ "$YES" == "1" ]]; then
+    return 0
+  fi
+
+  if ! is_interactive; then
+    echo "No interactive TTY available. Re-run with --yes for non-interactive install." >&2
+    return 1
   fi
 
   local answer
-  read -r -p "$prompt [y/N] " answer
+  printf '%s [y/N] ' "$prompt" >"$TTY"
+  IFS= read -r answer <"$TTY"
   [[ "$answer" == "y" || "$answer" == "Y" || "$answer" == "yes" || "$answer" == "YES" ]]
 }
 
@@ -126,6 +147,13 @@ require git
 require bun
 
 say "Install vcx"
+
+if is_interactive; then
+  INSTALL_DIR="$(prompt_value "Install directory" "$INSTALL_DIR")"
+  BIN_DIR="$(prompt_value "Binary directory" "$BIN_DIR")"
+  BIN_PATH="$BIN_DIR/$APP_NAME"
+fi
+
 note "Repo:        $REPO_URL"
 note "Install dir: $INSTALL_DIR"
 note "Binary:      $BIN_PATH"
