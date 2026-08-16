@@ -1,9 +1,14 @@
 {
   "name": "vcx",
-  "version": "0.1.2",
-  "description": "QoL wrapper around the Vercel CLI with multi-account and Cloudflare DNS helpers.",
+  "version": "0.1.3",
+  "description": "Experimental Vercel CLI wrapper for local account switching and optional Cloudflare DNS updates.",
   "type": "module",
   "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pc-style/vcx.git"
+  },
   "bin": {
     "vcx": "dist/index.js"
   },

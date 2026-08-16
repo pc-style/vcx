@@ -1,53 +1,67 @@
 # vcx
 
-`vcx` is a small wrapper around the real Vercel CLI. Unhandled commands pass through unchanged:
+`vcx` is an experimental, unofficial wrapper around the installed [Vercel CLI](https://vercel.com/docs/cli). It addresses two local workflow gaps: switching between saved Vercel CLI accounts and optionally adding a Cloudflare DNS record after `vercel domain add`. Commands that `vcx` does not handle are passed to `vercel` unchanged.
+
+> **Status:** Experimental and pre-1.0. There are no releases or compatibility guarantees. Review the [trust and privacy notes](#trust-and-privacy) before using real credentials or changing DNS.
+
+## Demo
+
+Normal Vercel commands pass through:
 
 ```bash
 vcx deploy --prod
 ```
 
-Handled commands add workflow helpers:
+With a [configured Cloudflare zone](#configure-cloudflare-dns), the built-in dry run shows the Vercel and Cloudflare operations without performing them:
 
 ```bash
-vcx update # or: vcx up
-vcx version # or: vcx v, vcx -v, vcx --version
-vcx account add client-a # or: vcx a add client-a
-vcx account list # or: vcx a list
-vcx account switch client-a # or: vcx a switch client-a
-vcx account remove client-a # or: vcx a remove client-a
-vcx domain add app.pcstyle.dev --dry-run
+vcx domain add app.example.com --dry-run
 ```
 
-## Setup
-
-One-line install:
+Account and utility commands:
 
 ```bash
-curl -fsSL https://install.pcstyle.dev/vsx.sh | bash
+vcx account add client-a       # alias: vcx a add client-a
+vcx account list               # alias: vcx a list
+vcx account switch client-a    # alias: vcx a switch client-a
+vcx account remove client-a    # alias: vcx a remove client-a
+vcx update                     # alias: vcx up
+vcx version                    # aliases: vcx v, vcx -v, vcx --version
 ```
 
-Non-interactive install:
+There is no hosted application demo; `vcx` is a local CLI.
+
+## Install
+
+Requirements: macOS or Linux, Git, Bun, Node.js 18 or newer, an installed Vercel CLI, and `~/.local/bin` on `PATH` (or a custom `VCX_BIN_DIR`). Cloudflare automation additionally requires an API token with DNS edit access to the intended zone.
+
+Inspect and run the installer:
 
 ```bash
-curl -fsSL https://install.pcstyle.dev/vsx.sh | bash -s -- --yes
+curl -fsSL https://install.pcstyle.dev/vsx.sh -o /tmp/vcx-install.sh
+less /tmp/vcx-install.sh
+bash /tmp/vcx-install.sh
 ```
 
-Manual setup:
+For a non-interactive install, pass `--yes`:
 
 ```bash
+bash /tmp/vcx-install.sh --yes
+```
+
+Or build the source directly:
+
+```bash
+git clone https://github.com/pc-style/vcx.git
+cd vcx
 bun install
 bun run build
-```
-
-For local use, link the package after building:
-
-```bash
 bun link
 ```
 
-`vcx` stores account snapshots in `~/.vcx/accounts/<name>/` and swaps the Vercel CLI files in `~/.vercel/auth.json` and `~/.vercel/config.json`.
+The installer clones this repository, installs its development dependencies, builds `dist/index.js`, and symlinks it into `~/.local/bin` by default. It does not install the Vercel CLI.
 
-## Config
+## Configure Cloudflare DNS
 
 Create `~/.vcx/config.json` when you want non-default behavior:
 
@@ -58,26 +72,32 @@ Create `~/.vcx/config.json` when you want non-default behavior:
     "tokenEnv": "CLOUDFLARE_API_TOKEN"
   },
   "domains": {
-    "pcstyle.dev": {
+    "example.com": {
       "provider": "cloudflare"
     }
   }
 }
 ```
 
-`vcx domain add <domain>` runs the real `vercel domain add <domain>` first. If the domain matches a configured Cloudflare zone, it upserts a DNS-only CNAME to `cname.vercel-dns.com` using the token from `CLOUDFLARE_API_TOKEN` by default.
-
-## Updates
-
-When installed from git using the installer, `vcx` checks for updates at most once per day during normal command runs. If `origin/main` is ahead, it prints a notice and leaves your current command alone.
-
-Apply updates explicitly:
+Then provide the token through the configured environment variable:
 
 ```bash
-vcx update
+export CLOUDFLARE_API_TOKEN="..."
+vcx domain add app.example.com --dry-run
 ```
 
-Disable update checks in `~/.vcx/config.json`:
+Without `--dry-run`, `vcx domain add <domain>` first runs the real `vercel domain add <domain>`. For a matching configured Cloudflare zone, it then creates or updates a DNS-only CNAME at that exact name pointing to `cname.vercel-dns.com`. Confirm that this record is appropriate for the domain before running the command; `vcx` does not inspect Vercel for a domain-specific DNS requirement.
+
+## Trust and privacy
+
+- `vcx` runs locally and no project-specific telemetry is implemented. Passthrough commands and account verification invoke the configured Vercel CLI, and DNS automation calls the Cloudflare API.
+- Account snapshots include Vercel's `auth.json` and `config.json`. They are copied unencrypted between `~/.vercel/` and `~/.vcx/accounts/<name>/`; protect those directories as credentials. `account remove` permanently removes the named snapshot.
+- The Cloudflare token is read from an environment variable and sent as a bearer token to `api.cloudflare.com`. `vcx` stores the environment variable's name in config, not the token itself.
+- Git-based installs check their configured Git remote for updates at most once per day unless disabled. The check writes a timestamp to `~/.vcx/last-update-check`; updates are only applied by `vcx update`.
+- The install endpoint serves this repository's `install.sh`. Piping remote scripts directly into a shell skips the review step, so the install instructions above download it first.
+- This repository has automated tests for local CLI behavior, but they do not authenticate to Vercel or Cloudflare and do not prove production safety.
+
+Disable update checks globally:
 
 ```json
 {
@@ -87,21 +107,26 @@ Disable update checks in `~/.vcx/config.json`:
 }
 ```
 
-Or for a single run:
+Or disable one check:
 
 ```bash
 VCX_NO_UPDATE_CHECK=1 vcx deploy --prod
 ```
 
-## QoL roadmap
+## Development
 
-- Temporary account switching: `vcx --account client-a deploy --prod`.
-- Import the currently logged-in Vercel account: `vcx account import <name>`.
-- Show identity for every saved account: `vcx account whoami --all`.
-- Snapshot/restore safety backups before every account switch.
-- Interactive config bootstrap: `vcx init`.
-- Domain verification: `vcx domain verify <domain>`.
-- Inspect Vercel's exact DNS requirements instead of assuming the default CNAME target.
-- Cloudflare conflict policy flags: `--fail-on-conflict`, `--overwrite`, `--prompt`.
-- Shell completions for zsh/bash/fish.
-- JSON output for scripts: `--json`.
+```bash
+bun install
+bun run check
+bun run test
+```
+
+The current implementation and planned ideas are tracked in [`PLAN.md`](PLAN.md). No maintenance schedule or support commitment is currently published.
+
+## License
+
+No license is granted. The source is publicly visible, but it is not currently offered under an open-source license. See [`LICENSE`](LICENSE).
+
+## Provenance
+
+The canonical source is [`pc-style/vcx`](https://github.com/pc-style/vcx). The project wraps the independently installed Vercel CLI and optionally calls Cloudflare's API; it is not an official Vercel or Cloudflare project. Vercel and Cloudflare names belong to their respective owners.
